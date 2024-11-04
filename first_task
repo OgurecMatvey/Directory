@@ -1,0 +1,121 @@
+import sqlite3
+from datetime import datetime, date
+import random
+import string
+import time
+import argparse
+import sys
+
+
+class Employee:
+    def __init__(self, full_name, birth_date, gender):
+        self.full_name = full_name
+        self.birth_date = datetime.strptime(birth_date, "%Y-%m-%d").date()
+        self.gender = gender
+
+    def save_to_db(self, conn):
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO employees (full_name, birth_date, gender) VALUES (?, ?, ?)",
+            (self.full_name, self.birth_date, self.gender)
+        )
+        conn.commit()
+
+    def calculate_age(self):
+        today = date.today()
+        return today.year - self.birth_date.year - ((today.month, today.day) < (self.birth_date.month, self.birth_date.day))
+
+
+class EmployeeDirectory:
+    def __init__(self, db_name="employees.db"):
+        self.conn = sqlite3.connect(db_name)
+
+    def create_table(self):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                full_name TEXT,
+                birth_date DATE,
+                gender TEXT
+            )
+        """)
+        self.conn.commit()
+
+    def add_employee(self, full_name, birth_date, gender):
+        employee = Employee(full_name, birth_date, gender)
+        employee.save_to_db(self.conn)
+
+    def list_employees(self):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT full_name, birth_date, gender FROM employees ORDER BY full_name")
+        rows = cursor.fetchall()
+        for row in rows:
+            name, birth_date, gender = row
+            employee = Employee(name, birth_date, gender)
+            age = employee.calculate_age()
+            print(f"{name}, {birth_date}, {gender}, {age} years old")
+
+    def bulk_insert_employees(self, count):
+        cursor = self.conn.cursor()
+        genders = ["Male", "Female"]
+        for _ in range(count):
+            full_name = f"{random.choice(string.ascii_uppercase)}{random.choice(string.ascii_lowercase*5)} {random.choice(string.ascii_uppercase)}{random.choice(string.ascii_lowercase*5)} {random.choice(string.ascii_uppercase)}{random.choice(string.ascii_lowercase*5)}"
+            birth_date = f"{random.randint(1950, 2005)}-{random.randint(1, 12):02d}-{random.randint(1, 28):02d}"
+            gender = random.choice(genders)
+            cursor.execute(
+                "INSERT INTO employees (full_name, birth_date, gender) VALUES (?, ?, ?)",
+                (full_name, birth_date, gender)
+            )
+        self.conn.commit()
+
+    def query_by_criteria(self):
+        start_time = time.time()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT full_name, birth_date, gender FROM employees WHERE gender = 'Male' AND full_name LIKE 'F%'")
+        rows = cursor.fetchall()
+        end_time = time.time()
+        duration = end_time - start_time
+        print(f"Query completed in {duration:.4f} seconds")
+        for row in rows:
+            print(row)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Employee Directory Application")
+    parser.add_argument("mode", type=int, nargs="?", help="Mode of operation: 1-6")
+    parser.add_argument("full_name", nargs="?", default="", help="Full name for mode 2")
+    parser.add_argument("birth_date", nargs="?", default="", help="Birth date (YYYY-MM-DD) for mode 2")
+    parser.add_argument("gender", nargs="?", default="", help="Gender for mode 2")
+    args = parser.parse_args()
+
+    if args.mode is None:
+        print("Error: The 'mode' argument is required. Please provide a mode (1-6) to run the application.")
+        sys.exit(1)
+
+    directory = EmployeeDirectory()
+
+    if args.mode == 1:
+        directory.create_table()
+        print("Table created.")
+    elif args.mode == 2:
+        if args.full_name and args.birth_date and args.gender:
+            directory.add_employee(args.full_name, args.birth_date, args.gender)
+            print(f"Employee {args.full_name} added.")
+        else:
+            print("Please provide full name, birth date, and gender for mode 2.")
+    elif args.mode == 3:
+        directory.list_employees()
+    elif args.mode == 4:
+        directory.bulk_insert_employees(1000000)
+        print("1,000,000 employees added.")
+    elif args.mode == 5:
+        directory.query_by_criteria()
+    elif args.mode == 6:
+        directory.query_by_criteria()  # optimization
+    else:
+        print("Invalid mode selected.")
+
+if __name__ == "__main__":
+    main()
+
